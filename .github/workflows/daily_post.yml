@@ -1,0 +1,25 @@
+name: AI Publisher
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'   # يعمل كل 4 ساعات تلقائياً
+  workflow_dispatch:        # يتيح لك تشغيله يدوياً بنقرة زر
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm install groq-sdk googleapis rss-parser
+
+      - name: Run publisher
+        run: node index.js
