@@ -1,15 +1,17 @@
-name: AI Publisher (DeepSeek Edition)
+name: AI Blogger Publisher (Gemini Free)
 
 on:
   schedule:
-    - cron: '0 */4 * * *'
-  workflow_dispatch:           # زر التشغيل اليدوي
+    # يعمل 3 مرات يومياً: الساعة 8 صباحاً، 4 عصراً، و 12 منتصف الليل (بتوقيت UTC)
+    - cron: '0 0,8,16 * * *'
+  workflow_dispatch: # زر التشغيل اليدوي من GitHub Actions
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -17,16 +19,16 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        # تم استبدال groq-sdk بـ openai
+      - name: Install Dependencies
+        # تم استبدال مكتبة openai/groq بمكتبة google-generative-ai
         run: |
-          npm install openai googleapis google-trends-api dotenv
+          npm install @google/generative-ai googleapis google-trends-api dotenv
 
-      - name: Run publisher
+      - name: Run Publisher Script
         run: node index.js
         env:
-          # تأكد من إضافة هذا السر في إعدادات GitHub بنفس الاسم
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }} 
+          # تأكد من إضافة هذه الأسرار (Secrets) في إعدادات المستودع على GitHub
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BLOG_ID: ${{ secrets.BLOG_ID }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
