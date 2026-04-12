@@ -3,58 +3,100 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { google } = require("googleapis");
 const googleTrends = require('google-trends-api');
 
+// إعدادات المحرك والمدونة من المتغيرات البيئية
 const CONFIG = {
-    geminiKey:"AIzaSyABmbvwX47N7iBTIV6QmOtfGrMZL699F9w", 
-    blogId: "8249860422330426533",
-    clientId: "872415365656-7qribadnc7k2u21kl6jjcbatdueevifh.apps.googleusercontent.com",
-    clientSecret: "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",
-    refreshToken: "1//04yti9k2agPknCgYIARAAGAQSNwF-L9IrTZPKt5Fqbg2vrM9sBtOks9cnY4M7Idg0LToQnlbYGME06k20vcyr_SVmYk1H_yZJdEc",
+    geminiKey: process.env.GEMINI_API_KEY,
+    blogId: process.env.BLOG_ID,
+    clientId: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    refreshToken: process.env.REFRESH_TOKEN,
     siteName: "zypxora"
 };
 
+// تهيئة Gemini
 const genAI = new GoogleGenerativeAI(CONFIG.geminiKey);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // موديل سريع ومجاني
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
+// 1. دالة جلب الترند (مع معالجة الأخطاء)
 async function getTrendingTopic() {
     try {
-        const results = await googleTrends.dailyTrends({ trendDate: new Date(), geo: 'US' });
+        console.log("📈 Fetching Google Trends...");
+        const results = await googleTrends.dailyTrends({
+            trendDate: new Date(),
+            geo: 'US',
+        });
         const parsedResults = JSON.parse(results);
         return parsedResults.default.trendingSearchesDays[0].trendingSearches[0].title.query;
-    } catch (e) { return "Future of AI in 2026"; }
+    } catch (error) {
+        console.warn("⚠️ Google Trends failed, using fallback topic.");
+        return "Emerging Tech Trends 2026";
+    }
 }
 
-async function runGeminiPublisher() {
+// 2. الدالة الرئيسية للنشر
+async function runAutoPublisher() {
     try {
         const topic = await getTrendingTopic();
-        console.log(`📈 Topic: ${topic}`);
+        console.log(`🎯 Target Topic: ${topic}`);
 
-        // توليد المحتوى
-        const prompt = `Write a 1500-word SEO article about ${topic}. Return ONLY JSON: 
-        {"title": "title here", "html": "HTML content here", "desc": "meta description", "labels": ["tech"]}`;
+        // إنشاء المحتوى باستخدام Gemini
+        const prompt = `Act as an expert SEO writer. Write a comprehensive 1500-word blog article about "${topic}".
+        Include: Catchy title, H2 and H3 headings, detailed paragraphs, and an FAQ section.
+        Use human-like tone, avoid AI cliches.
         
+        IMPORTANT: Return the response ONLY as a valid JSON object with this structure:
+        {
+            "title": "SEO Optimized Title",
+            "html": "Full article HTML content (use <p>, <h2>, <h3>, <ul>, <strong> tags)",
+            "metaDescription": "150 characters for SEO",
+            "labels": ["tag1", "tag2", "tag3"]
+        }`;
+
+        console.log("🤖 Gemini is generating content...");
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        const text = response.text().replace(/```json|```/g, ""); // تنظيف الرد
+        let text = response.text().trim();
+
+        // تنظيف النص من أي علامات Markdown قد يضيفها الموديل
+        text = text.replace(/^```json/i, "").replace(/```$/i, "").trim();
+        
         const data = JSON.parse(text);
 
+        // بناء الـ HTML النهائي مع صورة مميزة وتنسيق
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(data.title)}?width=1200&height=630&nologo=true`;
+        
+        const finalHtml = `
+            <div dir="ltr" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.8; color: #333;">
+                <img src="${imageUrl}" style="width: 100%; border-radius: 15px; margin-bottom: 25px;" alt="${data.title}">
+                <div class="article-body">
+                    ${data.html}
+                </div>
+                <hr>
+                <p style="color: #777;">Published by <strong>${CONFIG.siteName}</strong> - Your Guide to 2026 Tech.</p>
+            </div>
+        `;
+
         // النشر في بلوجر
+        console.log("🚀 Connecting to Blogger API...");
         const oauth2Client = new google.auth.OAuth2(CONFIG.clientId, CONFIG.clientSecret);
         oauth2Client.setCredentials({ refresh_token: CONFIG.refreshToken });
         const blogger = google.blogger({ version: "v3", auth: oauth2Client });
 
-        const res = await blogger.posts.insert({
+        const bloggerResponse = await blogger.posts.insert({
             blogId: CONFIG.blogId,
             requestBody: {
                 title: data.title,
-                content: data.html,
-                labels: data.labels
+                content: finalHtml,
+                labels: [...data.labels, "Automated", "AI-News"]
             }
         });
 
-        console.log(`✨ Published: ${res.data.url}`);
+        console.log(`✨ DONE! Article Published: ${bloggerResponse.data.url}`);
+
     } catch (error) {
-        console.error("🔴 Error:", error.message);
+        console.error("🔴 Fatal Error:", error.message);
     }
 }
 
-runGeminiPublisher();
+// تشغيل السكريبت
+runAutoPublisher();
