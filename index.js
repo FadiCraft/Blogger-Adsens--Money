@@ -1,20 +1,20 @@
-const { GoogleGenAI } = require("@google/generative-ai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { google } = require("googleapis");
 const googleTrends = require('google-trends-api');
 const axios = require('axios');
 
-// المفاتيح والبيانات مباشرة هنا للتجربة المحلية
+// الإعدادات: يقرأ من الـ Secrets أولاً، وإذا لم يجدها (مثل التجربة المحلية) يقرأ النص المباشر
 const CONFIG = {
-    geminiKey: "AQ.Ab8RN6IWxt-2Y2TijlrjYJSvUkqv4ayGe7cCS9e4QB57DS-Zwg",
-    blogId: "2725115584838237159",
-    clientId: "1022254688087-6bj9eij12uuh5u2apm300hg0rl3v3u5i.apps.googleusercontent.com",
-    clientSecret: "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",
-    refreshToken: "1//04npcWG7RN3UwCgYIARAAGAQSNwF-L9IrrQTVgQCZ0m7WdslFX1lpUIZRy3ODYu70BImi5mYfMUQ8RvKaIPyi3Uhu7esth8aeVro",
-    siteName: "zypxora2" // اسم موقعك
+    geminiKey: process.env.GEMINI_API_KEY || "AQ.Ab8RN6IWxt-2Y2TijlrjYJSvUkqv4ayGe7cCS9e4QB57DS-Zwg",
+    blogId: process.env.BLOG_ID || "2725115584838237159",
+    clientId: process.env.CLIENT_ID || "1022254688087-6bj9eij12uuh5u2apm300hg0rl3v3u5i.apps.googleusercontent.com",
+    clientSecret: process.env.CLIENT_SECRET || "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",
+    refreshToken: process.env.REFRESH_TOKEN || "1//04npcWG7RN3UwCgYIARAAGAQSNwF-L9IrrQTVgQCZ0m7WdslFX1lpUIZRy3ODYu70BImi5mYfMUQ8RvKaIPyi3Uhu7esth8aeVro",
+    siteName: "zypxora2" 
 };
 
-// التعديل الصحيح والنهائي لتشغيل الـ SDK الخاص بجوجل جيميناي
-const ai = new GoogleGenAI({ apiKey: CONFIG.geminiKey });
+// التعديل الصحيح والمستقر لتفعيل ذكاء Gemini
+const ai = new GoogleGenerativeAI(CONFIG.geminiKey);
 const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // إعداد صلاحيات بلوجر لجلب ورفع البيانات
@@ -62,7 +62,7 @@ async function uploadImageToBlogger(imageUrl, title) {
         });
 
         console.log("✨ Image uploaded successfully to Blogger Server!");
-        return mediaResponse.data.url; // رابط الصورة الدائم على خوادم جوجل
+        return mediaResponse.data.url; 
     } catch (error) {
         console.error("⚠️ Image upload to Blogger failed, using original link as backup.", error.message);
         return imageUrl; 
@@ -107,7 +107,7 @@ async function runGeminiPublisher() {
         const contentResult = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: contentPrompt }] }],
             generationConfig: {
-                responseMimeType: "application/json" // إجبار الجيميناي على إخراج بيئة JSON نظيفة ونظامية
+                responseMimeType: "application/json" // إجبار الموديل على تصفية الـ JSON بالكامل
             }
         });
 
