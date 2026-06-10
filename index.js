@@ -5,11 +5,12 @@ const axios = require('axios');
 
 // الإعدادات: يقرأ من الـ Secrets أولاً، وإذا لم يجدها يقرأ النص المباشر
 const CONFIG = {
-    geminiKey: process.env.GEMINI_API_KEY || "AQ.Ab8RN6I6CpCtGYqw9wn8d6O_P4pCHZxi9ZcmZfVJRNGriu_RNg",
-    blogId: process.env.BLOG_ID || "2725115584838237159",
-    clientId: process.env.CLIENT_ID || "1022254688087-6bj9eij12uuh5u2apm300hg0rl3v3u5i.apps.googleusercontent.com",
-    clientSecret: process.env.CLIENT_SECRET || "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",
-    refreshToken: process.env.REFRESH_TOKEN || "1//04npcWG7RN3UwCgYIARAAGAQSNwF-L9IrrQTVgQCZ0m7WdslFX1lpUIZRy3ODYu70BImi5mYfMUQ8RvKaIPyi3Uhu7esth8aeVro",
+    // ضع المفتاح الجديد هنا مباشرة ليتجاوز الـ Secrets تماماً
+    geminiKey: "AQ.Ab8RN6I6CpCtGYqw9wn8d6O_P4pCHZxi9ZcmZfVJRNGriu_RNg",
+    blogId: "2725115584838237159",
+    clientId: "1022254688087-6bj9eij12uuh5u2apm300hg0rl3v3u5i.apps.googleusercontent.com",
+    clientSecret: "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",
+    refreshToken: "1//04npcWG7RN3UwCgYIARAAGAQSNwF-L9IrrQTVgQCZ0m7WdslFX1lpUIZRy3ODYu70BImi5mYfMUQ8RvKaIPyi3Uhu7esth8aeVro",
     siteName: "zypxora2" 
 };
 
