@@ -3,7 +3,7 @@ const { google } = require("googleapis");
 const googleTrends = require('google-trends-api');
 const axios = require('axios');
 
-// ⚠️ ضع مفاتيحك وبياناتك مباشرة هنا للتجربة المحلية ⚠️
+// المفاتيح والبيانات مباشرة هنا للتجربة المحلية
 const CONFIG = {
     geminiKey: "AQ.Ab8RN6IWxt-2Y2TijlrjYJSvUkqv4ayGe7cCS9e4QB57DS-Zwg",
     blogId: "2725115584838237159",
@@ -13,9 +13,12 @@ const CONFIG = {
     siteName: "zypxora2" // اسم موقعك
 };
 
-// تفعيل ذكاء Gemini
-const ai = new GoogleGenAI({ apiKey: CONFIG.geminiKey });
-const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+// التعديل الصحيح لتفعيل ذكاء Gemini بناءً على الحزمة المحدثة
+const ai = new GoogleGenAI(); 
+const model = ai.getGenerativeModel({ 
+    model: "gemini-1.5-flash", 
+    apiKey: CONFIG.geminiKey // تمرير المفتاح هنا كإعداد للموديل مباشرة
+});
 
 // إعداد صلاحيات بلوجر لجلب ورفع البيانات
 const oauth2Client = new google.auth.OAuth2(CONFIG.clientId, CONFIG.clientSecret);
