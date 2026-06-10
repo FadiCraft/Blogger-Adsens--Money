@@ -1,27 +1,43 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { google } = require("googleapis");
 const googleTrends = require('google-trends-api');
 const axios = require('axios');
 
 // الإعدادات: يقرأ من الـ Secrets أولاً، وإذا لم يجدها يقرأ النص المباشر
 const CONFIG = {
-    // ضع المفتاح الجديد هنا مباشرة ليتجاوز الـ Secrets تماماً
-    geminiKey: "AQ.Ab8RN6I6CpCtGYqw9wn8d6O_P4pCHZxi9ZcmZfVJRNGriu_RNg",
-    blogId: "2725115584838237159",
-    clientId: "1022254688087-6bj9eij12uuh5u2apm300hg0rl3v3u5i.apps.googleusercontent.com",
-    clientSecret: "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",
-    refreshToken: "1//04npcWG7RN3UwCgYIARAAGAQSNwF-L9IrrQTVgQCZ0m7WdslFX1lpUIZRy3ODYu70BImi5mYfMUQ8RvKaIPyi3Uhu7esth8aeVro",
+    geminiKey: process.env.GEMINI_API_KEY || "AIzaSy⚠️_ضع_مفتاح_جيميناي_الجديد_هنا_كاملاً",
+    blogId: process.env.BLOG_ID || "2725115584838237159",
+    clientId: process.env.CLIENT_ID || "1022254688087-6bj9eij12uuh5u2apm300hg0rl3v3u5i.apps.googleusercontent.com",
+    clientSecret: process.env.CLIENT_SECRET || "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",
+    refreshToken: process.env.REFRESH_TOKEN || "1//04npcWG7RN3UwCgYIARAAGAQSNwF-L9IrrQTVgQCZ0m7WdslFX1lpUIZRy3ODYu70BImi5mYfMUQ8RvKaIPyi3Uhu7esth8aeVro",
     siteName: "zypxora2" 
 };
-
-// تفعيل ذكاء Gemini بالطريقة الرسمية المعزولة لتفادي خطأ الـ 401
-const ai = new GoogleGenerativeAI(CONFIG.geminiKey);
-const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // إعداد صلاحيات بلوجر لجلب ورفع البيانات
 const oauth2Client = new google.auth.OAuth2(CONFIG.clientId, CONFIG.clientSecret);
 oauth2Client.setCredentials({ refresh_token: CONFIG.refreshToken });
 const blogger = google.blogger({ version: "v3", auth: oauth2Client });
+
+// دالة الاتصال المباشر والمعزول بـ Gemini لتفادي خطأ الـ OAuth التلقائي
+async function callGeminiDirect(prompt, isJson = false) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${CONFIG.geminiKey}`;
+    
+    const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }]
+    };
+
+    if (isJson) {
+        requestBody.generationConfig = {
+            responseMimeType: "application/json"
+        };
+    }
+
+    // إرسال الطلب بهيدرز نظيفة تماماً لقطع أي تداخل أمني
+    const response = await axios.post(url, requestBody, {
+        headers: { 'Content-Type': 'application/json' }
+    });
+
+    return response.data.candidates[0].content.parts[0].text;
+}
 
 // 1. دالة جلب الترند اليومي
 async function getTrendingTopic() {
@@ -33,9 +49,7 @@ async function getTrendingTopic() {
         });
         const parsedResults = JSON.parse(results);
         const trendingSearches = parsedResults.default.trendingSearchesDays[0].trendingSearches;
-        const topTrend = trendingSearches[0].title.query;
-        console.log(`🔥 Top Trend Found: ${topTrend}`);
-        return topTrend;
+        return trendingSearches[0].title.query;
     } catch (error) {
         console.warn("⚠️ Google Trends blocked/failed. Using stable trending backup topic.");
         const techBackups = [
@@ -84,8 +98,7 @@ async function runGeminiPublisher() {
         // أ. صناعة عنوان السيو بواسطة Gemini
         console.log(`📝 Generating SEO Title for: ${trendingTopic}...`);
         const titlePrompt = `Act as an expert SEO copywriter. Generate a highly-searched, viral click-magnet title about "${trendingTopic}" for the year 2026. Make it solve a user's problem or reveal a shocking fact. NO quotes, max 60 characters. Return only the final title string without any other text.`;
-        const titleResult = await model.generateContent(titlePrompt);
-        const targetTitle = titleResult.response.text().trim();
+        const targetTitle = (await callGeminiDirect(titlePrompt)).trim();
         console.log(`🎯 Title: ${targetTitle}`);
 
         // ب. توليد المقال والـ JSON بهيكل صارم لمنع أخطاء الاستخراج
@@ -111,15 +124,10 @@ async function runGeminiPublisher() {
             "labels": ["keyword1", "keyword2", "keyword3", "keyword4"]
         }`;
 
-        const contentResult = await model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: contentPrompt }] }],
-            generationConfig: {
-                responseMimeType: "application/json" 
-            }
-        });
+        const rawJsonResult = await callGeminiDirect(contentPrompt, true);
 
         // تنظيف النص المسترجع للتأكد من أنه JSON نقي
-        let cleanJsonText = contentResult.response.text().trim();
+        let cleanJsonText = rawJsonResult.trim();
         if (cleanJsonText.startsWith("```json")) {
             cleanJsonText = cleanJsonText.replace(/```json|```/g, "").trim();
         }
@@ -129,8 +137,8 @@ async function runGeminiPublisher() {
         // جـ. توليد وصف الصورة وبنائها
         console.log("🎨 Crafting AI Image Prompt...");
         const imgPromptReq = `Write a 5-word prompt for an AI image generator to create a modern, minimalist, faceless tech blog banner for: "${targetTitle}". Return only the prompt words.`;
-        const imgDescResult = await model.generateContent(imgPromptReq);
-        const imgPrompt = encodeURIComponent(imgDescResult.response.text().trim());
+        const rawImgDesc = await callGeminiDirect(imgPromptReq);
+        const imgPrompt = encodeURIComponent(rawImgDesc.trim());
         const rawImageUrl = `https://image.pollinations.ai/prompt/${imgPrompt}?width=1200&height=630&nologo=true`; 
 
         // د. رفع الصورة فوراً إلى خوادم بلوجر
@@ -207,6 +215,9 @@ async function runGeminiPublisher() {
         console.log(`✨ DONE! Article Published Successfully: ${response.data.url}`);
     } catch (error) {
         console.error("🔴 Error details:", error.message);
+        if (error.response && error.response.data) {
+            console.error("📦 Server Response Error:", JSON.stringify(error.response.data));
+        }
     }
 }
 
