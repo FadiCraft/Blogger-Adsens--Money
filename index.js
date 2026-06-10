@@ -3,7 +3,7 @@ const { google } = require("googleapis");
 const googleTrends = require('google-trends-api');
 const axios = require('axios');
 
-// الإعدادات: يقرأ من الـ Secrets أولاً، وإذا لم يجدها (مثل التجربة المحلية) يقرأ النص المباشر
+// الإعدادات: يقرأ من الـ Secrets أولاً، وإذا لم يجدها يقرأ النص المباشر
 const CONFIG = {
     geminiKey: process.env.GEMINI_API_KEY || "AQ.Ab8RN6IWxt-2Y2TijlrjYJSvUkqv4ayGe7cCS9e4QB57DS-Zwg",
     blogId: process.env.BLOG_ID || "2725115584838237159",
@@ -13,7 +13,7 @@ const CONFIG = {
     siteName: "zypxora2" 
 };
 
-// التعديل الصحيح والمستقر لتفعيل ذكاء Gemini
+// تفعيل ذكاء Gemini بالطريقة الرسمية المعزولة لتفادي خطأ الـ 401
 const ai = new GoogleGenerativeAI(CONFIG.geminiKey);
 const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -36,8 +36,14 @@ async function getTrendingTopic() {
         console.log(`🔥 Top Trend Found: ${topTrend}`);
         return topTrend;
     } catch (error) {
-        console.warn("⚠️ Failed to fetch Google Trends, falling back to a default Tech Topic.", error.message);
-        return "Artificial Intelligence Startups"; 
+        console.warn("⚠️ Google Trends blocked/failed. Using stable trending backup topic.");
+        const techBackups = [
+            "Artificial Intelligence Startups 2026",
+            "Next Generation Quantum Computing",
+            "Future of Automation and Robotics",
+            "Cybersecurity Trends for Businesses"
+        ];
+        return techBackups[Math.floor(Math.random() * techBackups.length)]; 
     }
 }
 
@@ -107,11 +113,17 @@ async function runGeminiPublisher() {
         const contentResult = await model.generateContent({
             contents: [{ role: 'user', parts: [{ text: contentPrompt }] }],
             generationConfig: {
-                responseMimeType: "application/json" // إجبار الموديل على تصفية الـ JSON بالكامل
+                responseMimeType: "application/json" 
             }
         });
 
-        const articleData = JSON.parse(contentResult.response.text());
+        // تنظيف النص المسترجع للتأكد من أنه JSON نقي
+        let cleanJsonText = contentResult.response.text().trim();
+        if (cleanJsonText.startsWith("```json")) {
+            cleanJsonText = cleanJsonText.replace(/```json|```/g, "").trim();
+        }
+
+        const articleData = JSON.parse(cleanJsonText);
 
         // جـ. توليد وصف الصورة وبنائها
         console.log("🎨 Crafting AI Image Prompt...");
@@ -126,7 +138,7 @@ async function runGeminiPublisher() {
         // هـ. تجميع الـ HTML النهائي مع السيو والـ Schema
         console.log("🏗️ Assembling Professional HTML...");
         const schemaMarkup = {
-            "@context": "https://schema.org",
+            "@context": "[https://schema.org](https://schema.org)",
             "@type": "Article",
             "headline": targetTitle,
             "image": finalImageUrl,
@@ -168,7 +180,7 @@ async function runGeminiPublisher() {
                 </div>
                 
                 <div class="pro-author">
-                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=TechVanguard" alt="Author">
+                    <img src="[https://api.dicebear.com/7.x/avataaars/svg?seed=TechVanguard](https://api.dicebear.com/7.x/avataaars/svg?seed=TechVanguard)" alt="Author">
                     <div>
                         <strong>Published by ${CONFIG.siteName}</strong>
                         <p style="font-size: 14px; margin: 0; color: #64748b;">Delivering the latest insights in Tech and Business.</p>
