@@ -13,12 +13,9 @@ const CONFIG = {
     siteName: "zypxora2" // اسم موقعك
 };
 
-// التعديل الصحيح لتفعيل ذكاء Gemini بناءً على الحزمة المحدثة
-const ai = new GoogleGenAI(); 
-const model = ai.getGenerativeModel({ 
-    model: "gemini-1.5-flash", 
-    apiKey: CONFIG.geminiKey // تمرير المفتاح هنا كإعداد للموديل مباشرة
-});
+// التعديل الصحيح والنهائي لتشغيل الـ SDK الخاص بجوجل جيميناي
+const ai = new GoogleGenAI({ apiKey: CONFIG.geminiKey });
+const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 // إعداد صلاحيات بلوجر لجلب ورفع البيانات
 const oauth2Client = new google.auth.OAuth2(CONFIG.clientId, CONFIG.clientSecret);
