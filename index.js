@@ -1,20 +1,28 @@
-require('dotenv').config();
-const Groq = require("groq-sdk");
+const { GoogleGenAI } = require("@google/generative-ai");
 const { google } = require("googleapis");
 const googleTrends = require('google-trends-api');
+const axios = require('axios');
 
+// ⚠️ ضع مفاتيحك وبياناتك مباشرة هنا للتجربة المحلية ⚠️
 const CONFIG = {
-  groqKey: "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",
-    blogId: "8249860422330426533",
-    clientId: "872415365656-7qribadnc7k2u21kl6jjcbatdueevifh.apps.googleusercontent.com",
-    clientSecret: "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",
-    refreshToken: "1//04yti9k2agPknCgYIARAAGAQSNwF-L9IrTZPKt5Fqbg2vrM9sBtOks9cnY4M7Idg0LToQnlbYGME06k20vcyr_SVmYk1H_yZJdEc",
-    siteName: "zypxora"
+    geminiKey: "AQ.Ab8RN6IWxt-2Y2TijlrjYJSvUkqv4ayGe7cCS9e4QB57DS-Zwg",
+    blogId: "2725115584838237159",
+    clientId: "1022254688087-6bj9eij12uuh5u2apm300hg0rl3v3u5i.apps.googleusercontent.com",
+    clientSecret: "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",
+    refreshToken: "1//04npcWG7RN3UwCgYIARAAGAQSNwF-L9IrrQTVgQCZ0m7WdslFX1lpUIZRy3ODYu70BImi5mYfMUQ8RvKaIPyi3Uhu7esth8aeVro",
+    siteName: "zypxora2" // اسم موقعك
 };
 
-const groq = new Groq({ apiKey: CONFIG.groqKey });
+// تفعيل ذكاء Gemini
+const ai = new GoogleGenAI({ apiKey: CONFIG.geminiKey });
+const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-// دالة لجلب الترند من جوجل (الولايات المتحدة)
+// إعداد صلاحيات بلوجر لجلب ورفع البيانات
+const oauth2Client = new google.auth.OAuth2(CONFIG.clientId, CONFIG.clientSecret);
+oauth2Client.setCredentials({ refresh_token: CONFIG.refreshToken });
+const blogger = google.blogger({ version: "v3", auth: oauth2Client });
+
+// 1. دالة جلب الترند اليومي
 async function getTrendingTopic() {
     try {
         console.log("📈 Fetching today's Google Trends (US)...");
@@ -22,79 +30,100 @@ async function getTrendingTopic() {
             trendDate: new Date(),
             geo: 'US',
         });
-        
         const parsedResults = JSON.parse(results);
         const trendingSearches = parsedResults.default.trendingSearchesDays[0].trendingSearches;
-        
-        // نأخذ أول ترند (الأكثر بحثاً)
         const topTrend = trendingSearches[0].title.query;
         console.log(`🔥 Top Trend Found: ${topTrend}`);
         return topTrend;
     } catch (error) {
         console.warn("⚠️ Failed to fetch Google Trends, falling back to a default Tech Topic.", error.message);
-        return "Artificial Intelligence Startups"; // بديل في حال تعطل الترند
+        return "Artificial Intelligence Startups"; 
     }
 }
 
-async function runGroqPublisher() {
+// 2. دالة رفع الصورة إلى بلوجر لضمان بقائها للأبد
+async function uploadImageToBlogger(imageUrl, title) {
     try {
-        // 1. جلب موضوع الترند
-        const trendingTopic = await getTrendingTopic();
-        
-        // 2. إنشاء عنوان SEO جذاب
-        console.log(`📝 Generating SEO Title for: ${trendingTopic}...`);
-        const titleRes = await groq.chat.completions.create({
-            messages: [{ 
-                role: "user", 
-                content: `Act as an expert SEO copywriter. Generate a highly-searched, viral click-magnet title about "${trendingTopic}" for the year 2026. Make it solve a user's problem or reveal a shocking fact. NO quotes, max 60 characters.` 
-            }],
-            model: "llama-3.3-70b-versatile",
+        console.log("📸 Downloading image from Pollinations...");
+        const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+        const base64Image = Buffer.from(response.data, 'binary').toString('base64');
+
+        console.log("💾 Uploading image directly to Blogger Media Album...");
+        const mediaResponse = await blogger.media.insert({
+            blogId: CONFIG.blogId,
+            requestBody: {
+                title: `${title.replace(/[^a-zA-Z0-9]/g, '_')}.jpg`,
+                mimeType: 'image/jpeg'
+            },
+            media: {
+                mimeType: 'image/jpeg',
+                body: Buffer.from(base64Image, 'base64')
+            }
         });
-        const targetTitle = titleRes.choices[0].message.content.trim();
+
+        console.log("✨ Image uploaded successfully to Blogger Server!");
+        return mediaResponse.data.url; // رابط الصورة الدائم على خوادم جوجل
+    } catch (error) {
+        console.error("⚠️ Image upload to Blogger failed, using original link as backup.", error.message);
+        return imageUrl; 
+    }
+}
+
+// 3. الدالة الأساسية للمشروع
+async function runGeminiPublisher() {
+    try {
+        const trendingTopic = await getTrendingTopic();
+
+        // أ. صناعة عنوان السيو بواسطة Gemini
+        console.log(`📝 Generating SEO Title for: ${trendingTopic}...`);
+        const titlePrompt = `Act as an expert SEO copywriter. Generate a highly-searched, viral click-magnet title about "${trendingTopic}" for the year 2026. Make it solve a user's problem or reveal a shocking fact. NO quotes, max 60 characters. Return only the final title string without any other text.`;
+        const titleResult = await model.generateContent(titlePrompt);
+        const targetTitle = titleResult.response.text().trim();
         console.log(`🎯 Title: ${targetTitle}`);
 
-        // 3. كتابة المحتوى البشري المتوافق مع أدسنس
-        console.log("🤖 Generating AdSense-Approved Content & Schema...");
-        const contentRes = await groq.chat.completions.create({
-            messages: [{ 
-                role: "user", 
-                content: `Write a highly engaging, SEO-optimized article about "${targetTitle}". 
-                
-                STRICT ADSENSE GUIDELINES:
-                1. Tone: Conversational, human-like, expert yet accessible. Avoid AI buzzwords completely (e.g., "delve", "tapestry", "in conclusion", "beacon").
-                2. Structure: 
-                   - Catchy Introduction hook.
-                   - Table of Contents (HTML list).
-                   - Deep-dive body paragraphs with <h2> and <h3>.
-                   - Real-world examples or hypothetical scenarios.
-                   - An FAQ section at the end (Very important for SEO).
-                3. Length: Comprehensive (1500+ words).
-                4. Links: Include exactly 2 authority external links (e.g., Wikipedia, Forbes) using: <a href='URL' target='_blank' rel='noopener noreferrer'>Link Text</a>.
-                5. Output formatting: Output ONLY valid JSON. Use single quotes (') for HTML attributes.
-                
-                JSON STRUCTURE:
-                {
-                    "articleHtml": "The full HTML starting with the introduction (no <h1> needed, blogger adds it). Use rich formatting like <blockquote>, <ul>, and <strong>.",
-                    "metaDescription": "A 150-character catchy meta description for search engines.",
-                    "labels": ["keyword1", "keyword2", "keyword3", "keyword4"]
-                }` 
-            }],
-            model: "llama-3.3-70b-versatile",
-            response_format: { type: "json_object" } 
-        });
+        // ب. توليد المقال والـ JSON بهيكل صارم لمنع أخطاء الاستخراج
+        console.log("🤖 Generating AdSense-Approved Content & Schema via Gemini...");
+        const contentPrompt = `Write a highly engaging, SEO-optimized article about "${targetTitle}". 
         
-        const articleData = JSON.parse(contentRes.choices[0].message.content);
+        STRICT ADSENSE GUIDELINES:
+        1. Tone: Conversational, human-like, expert yet accessible. Avoid AI buzzwords completely (e.g., "delve", "tapestry", "in conclusion", "beacon").
+        2. Structure: 
+           - Catchy Introduction hook.
+           - Table of Contents (HTML list).
+           - Deep-dive body paragraphs with <h2> and <h3>.
+           - Real-world examples or hypothetical scenarios.
+           - An FAQ section at the end (Very important for SEO).
+        3. Length: Comprehensive (1500+ words).
+        4. Links: Include exactly 2 authority external links (e.g., Wikipedia, Forbes) using: <a href='URL' target='_blank' rel='noopener noreferrer'>Link Text</a>.
+        5. Output formatting: Output ONLY a valid JSON object matching the requested schema. No markdown formatting like \`\`\`json.
+        
+        JSON STRUCTURE SCHEMA:
+        {
+            "articleHtml": "The full HTML starting with the introduction (no <h1> needed, blogger adds it). Use rich formatting like <blockquote>, <ul>, and <strong>. Use single quotes for HTML attributes.",
+            "metaDescription": "A 150-character catchy meta description for search engines.",
+            "labels": ["keyword1", "keyword2", "keyword3", "keyword4"]
+        }`;
 
-        // 4. جلب الصورة
-        console.log("🎨 Generating Featured Image...");
-        const imgDescRes = await groq.chat.completions.create({
-            messages: [{ role: "user", content: `Write a 5-word prompt for an AI image generator to create a modern, minimalist, faceless tech blog banner for: "${targetTitle}".` }],
-            model: "llama-3.3-70b-versatile",
+        const contentResult = await model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: contentPrompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json" // إجبار الجيميناي على إخراج بيئة JSON نظيفة ونظامية
+            }
         });
-        const imgPrompt = encodeURIComponent(imgDescRes.choices[0].message.content.trim());
-        const finalImageUrl = `https://image.pollinations.ai/prompt/${imgPrompt}?width=1200&height=630&nologo=true`; 
 
-        // 5. بناء كود HTML احترافي مع إضافة Schema SEO
+        const articleData = JSON.parse(contentResult.response.text());
+
+        // جـ. توليد وصف الصورة وبنائها
+        console.log("🎨 Crafting AI Image Prompt...");
+        const imgPromptReq = `Write a 5-word prompt for an AI image generator to create a modern, minimalist, faceless tech blog banner for: "${targetTitle}". Return only the prompt words.`;
+        const imgDescResult = await model.generateContent(imgPromptReq);
+        const imgPrompt = encodeURIComponent(imgDescResult.response.text().trim());
+        const rawImageUrl = `https://image.pollinations.ai/prompt/${imgPrompt}?width=1200&height=630&nologo=true`; 
+
+        // د. رفع الصورة فوراً إلى خوادم بلوجر
+        const finalImageUrl = await uploadImageToBlogger(rawImageUrl, targetTitle);
+
+        // هـ. تجميع الـ HTML النهائي مع السيو والـ Schema
         console.log("🏗️ Assembling Professional HTML...");
         const schemaMarkup = {
             "@context": "https://schema.org",
@@ -150,26 +179,22 @@ async function runGroqPublisher() {
 
         const finalLabels = [...new Set([...(articleData.labels || []), "Trending", "Tech News"])].slice(0, 8);
 
-        // 6. النشر في بلوجر
+        // و. خطوة النشر النهائية في بلوجر
         console.log(`🚀 Publishing to Blogger with labels: ${finalLabels.join(', ')}...`);
-        const oauth2Client = new google.auth.OAuth2(CONFIG.clientId, CONFIG.clientSecret);
-        oauth2Client.setCredentials({ refresh_token: CONFIG.refreshToken });
-        const blogger = google.blogger({ version: "v3", auth: oauth2Client });
-
         const response = await blogger.posts.insert({
             blogId: CONFIG.blogId,
             requestBody: { 
                 title: targetTitle, 
                 content: finalHtml, 
                 labels: finalLabels,
-                customMetaData: articleData.metaDescription // مهم جداً للـ SEO في بلوجر
+                customMetaData: articleData.metaDescription 
             }
         });
 
-        console.log(`✨ DONE! Article Published: ${response.data.url}`);
+        console.log(`✨ DONE! Article Published Successfully: ${response.data.url}`);
     } catch (error) {
         console.error("🔴 Error details:", error.message);
     }
 }
 
-runGroqPublisher();
+runGeminiPublisher();
